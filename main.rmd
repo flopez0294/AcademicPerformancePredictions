@@ -8,12 +8,52 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-student_por = read.csv('student+performance/student-por.csv', sep = ';',  stringsAsFactors = FALSE)
-student_math = read.csv('student+performance/student-mat.csv', sep = ';', stringsAsFactors = FALSE)
+student_por = read.csv('student+performance/student-por.csv', sep = ';',  stringsAsFactors = TRUE)
+student_math = read.csv('student+performance/student-mat.csv', sep = ';', stringsAsFactors = TRUE)
 all_data = rbind(student_por, student_math)
+summary(all_data)
 ```
 
 ```{r}
 head(all_data)
 write.csv(all_data, 'student+performance/merged_data.csv', row.names = FALSE)
+```
+
+Covariance
+```{r}
+library(corrplot)
+numAll = all_data[ ,sapply(all_data, is.numeric)]
+corrMat = cor(numAll)
+corrplot(corrMat)
+```
+
+```{r}
+par(mfrow = c(2, 3))
+namesInData = names(all_data)
+for (i in namesInData){
+  if (i != "G3") {
+    boxplot(all_data$G3 ~ all_data[, i], xlab = i, ylab = "Final Grade")
+  }
+  
+}
+```
+- We see that study time gives a higher final grade along with G1 and G2, which are first and second period grades for the class. We notice the the number of failures the student has had gives and impact for the final grade of there current class. 
+```{r}
+par(mfrow = c(2, 3))
+namesInData = names(all_data)
+for (i in namesInData){
+  if (i != "G3") {
+      plot(all_data$G3 ~ all_data[, i], xlab = i, ylab = "Final Grade")
+  }
+  
+}
+```
+
+```{r}
+linearFit = lm(G3 ~ G1 + G2 + studytime + failures, all_data)
+summary(linearFit)
+newData <- data.frame(G1 = 10, G2 = 10, studytime = 4, failures = 2)
+
+preds = predict(linearFit, newData)
+preds
 ```
