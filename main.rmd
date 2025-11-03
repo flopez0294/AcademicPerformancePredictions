@@ -1,0 +1,19 @@
+---
+title: "Student Performance Predictions"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+student_por = read.csv('student+performance/student-por.csv', sep = ';',  stringsAsFactors = FALSE)
+student_math = read.csv('student+performance/student-mat.csv', sep = ';', stringsAsFactors = FALSE)
+all_data = rbind(student_por, student_math)
+```
+
+```{r}
+head(all_data)
+write.csv(all_data, 'student+performance/merged_data.csv', row.names = FALSE)
+```
