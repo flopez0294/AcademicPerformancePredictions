@@ -24,7 +24,7 @@ Covariance
 library(corrplot)
 numAll = all_data[ ,sapply(all_data, is.numeric)]
 corrMat = cor(numAll)
-corrplot(corrMat)
+corrplot(corrMat, type = "upper", number.cex = 1.5, tl.cex = 1.5)
 ```
 
 ```{r}
@@ -53,10 +53,9 @@ set.seed(1)
 n = nrow(all_data)
 percentTrain = .7
 trainIdx = sample(1:n, n*percentTrain)
-
-allLinearFit = lm(G3 ~ ., all_data[trainIdx,])
+trainData = all_data[trainIdx, ]
+allLinearFit = lm(G3 ~ ., trainData)
 testData = all_data[-trainIdx,]
-
 summary(allLinearFit)
 preds = predict(allLinearFit, testData)
 sqrt(mean((testData$G3 - preds)^2))
@@ -64,28 +63,55 @@ sqrt(mean((testData$G3 - preds)^2))
 
 ```{r}
 
-linearFit = lm(G3 ~ G1 + G2 + studytime + failures, all_data[trainIdx, ])
+linearFit = lm(G3 ~ G1 + G2 + studytime + failures, trainData)
 summary(linearFit)
 
-preds = predict(linearFit, all_data[-trainIdx, ])
-sqrt(mean((all_data[-trainIdx,]$G3 - preds)^2))
+preds = predict(linearFit, testData)
+sqrt(mean((testData$G3 - preds)^2))
+```
+-best Subset selection
+```{r}
+#install.packages("leaps")
+library(leaps)
+regfit.full = regsubsets(G3 ~ ., trainData, nvmax = ncol(trainData) - 1)
+summary(regfit.full)
 ```
 
-
 ```{r}
-nullFit = lm(G3 ~ 1, all_data[trainIdx, ])
-fullFit = lm(G3 ~ ., all_data[trainIdx, ])
+num_pred = 1:length(regfit.full$rss)
+plot(num_pred, regfit.full$rss, xlab = "Number of Predictors", ylab = "RSS", type = "b", pch = 19, col = "blue", main = "RSS vs Number of Predictors")
+which.min(regfit.full$rss)
+```
+
+- Backward Selection
+```{r}
+fullFit = lm(G3 ~ ., trainData)
+backward_model = step(fullFit, direction = "backward", trace = F)
+summary(backward_model)
+```
+
+- Forward Selection
+```{r}
+nullFit = lm(G3 ~ 1, trainData)
+fullFit = lm(G3 ~ ., trainData)
 
 forward_model = step(nullFit, scope = list(lower = nullFit, upper = fullFit), direction = "forward", trace = F)
 summary(forward_model)
-preds = predict(forward_model, all_data[-trainIdx, ])
-sqrt(mean((all_data[-trainIdx, ]$G3 - preds)^2))
+preds = predict(forward_model, testData)
+sqrt(mean((testData$G3 - preds)^2))
 ```
+- The forward and backward selection give the same output so it would be the same rmse.
 
 ```{r}
-plot(preds, all_data[-trainIdx, ]$G3,
-     xlab = "Predicted G3", ylab = "Actual G3",
-     main = "Predicted vs Actual Final Grades")
-abline(0, 1, col = "red")
-
+plot(preds, testData$G3, xlab = "Predicted G3", ylab = "Actual G3", main = "Predicted vs Actual Final Grades")
 ```
+
+- Noticed that the number of absences increases the predicted final grade, which should not be the case, so we should a model without the absences.
+```{r}
+forward_model_noAbsence = lm(formula = G3 ~ G2 + failures + G1 + paid + famsup + 
+    traveltime + Pstatus, data = trainData)
+summary(forward_model_noAbsence)
+preds = predict(forward_model_noAbsence, testData)
+sqrt(mean((testData$G3 - preds)^2))
+```
+The RMSE is higher then the previous model so we go back to the previous model found from forward selection
