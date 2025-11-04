@@ -48,12 +48,44 @@ for (i in namesInData){
   
 }
 ```
+```{r}
+set.seed(1)
+n = nrow(all_data)
+percentTrain = .7
+trainIdx = sample(1:n, n*percentTrain)
+
+allLinearFit = lm(G3 ~ ., all_data[trainIdx,])
+testData = all_data[-trainIdx,]
+
+summary(allLinearFit)
+preds = predict(allLinearFit, testData)
+sqrt(mean((testData$G3 - preds)^2))
+```
 
 ```{r}
-linearFit = lm(G3 ~ G1 + G2 + studytime + failures, all_data)
-summary(linearFit)
-newData <- data.frame(G1 = 10, G2 = 10, studytime = 4, failures = 2)
 
-preds = predict(linearFit, newData)
-preds
+linearFit = lm(G3 ~ G1 + G2 + studytime + failures, all_data[trainIdx, ])
+summary(linearFit)
+
+preds = predict(linearFit, all_data[-trainIdx, ])
+sqrt(mean((all_data[-trainIdx,]$G3 - preds)^2))
+```
+
+
+```{r}
+nullFit = lm(G3 ~ 1, all_data[trainIdx, ])
+fullFit = lm(G3 ~ ., all_data[trainIdx, ])
+
+forward_model = step(nullFit, scope = list(lower = nullFit, upper = fullFit), direction = "forward", trace = F)
+summary(forward_model)
+preds = predict(forward_model, all_data[-trainIdx, ])
+sqrt(mean((all_data[-trainIdx, ]$G3 - preds)^2))
+```
+
+```{r}
+plot(preds, all_data[-trainIdx, ]$G3,
+     xlab = "Predicted G3", ylab = "Actual G3",
+     main = "Predicted vs Actual Final Grades")
+abline(0, 1, col = "red")
+
 ```
