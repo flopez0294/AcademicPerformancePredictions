@@ -63,6 +63,7 @@ nameOfNumericCols
 ```{r}
 set.seed(1)
 n = nrow(all_data)
+nFeatures= ncol(all_data) - 1
 percentTrain = .7
 nTrain = n*percentTrain
 trainIdx = sample(1:n, nTrain)
@@ -86,7 +87,7 @@ sqrt(mean((testData$G3 - preds)^2))
 ```{r}
 #install.packages("leaps")
 library(leaps)
-regfit.full = regsubsets(G3 ~ ., trainData, nvmax = ncol(trainData) - 1)
+regfit.full = regsubsets(G3 ~ ., trainData, nvmax = nFeatures)
 regfit.summary = summary(regfit.full)
 regfit.summary
 ```
@@ -110,6 +111,7 @@ sqrt(mean((testData$G3 - preds)^2))
 
 - Using validation set for best subset selection
 ```{r}
+set.seed(1)
 percentVal = .2
 nValidation = percentVal*n
 valD = sample(1:nTrain, nValidation)
@@ -118,13 +120,13 @@ subSetTrain = trainData[-valD,]
 ```
 
 ```{r}
-regfit.best.validate = regsubsets(G3 ~ ., subSetTrain, nvmax = ncol(trainData) - 1)
+regfit.best.validate = regsubsets(G3 ~ ., subSetTrain, nvmax = nFeatures)
 ```
 
 - the model with the lowest validation error is one that uses 7 variables. They are traveltime, failures, famsup, paid, absences, G1, and G2. Now we should train a model using the full training set and check the testing error.
 ```{r}
 val.mat = model.matrix(G3 ~ ., subSetVal)
-val.errors = rep(NA, ncol(trainData) - 1)
+val.errors = rep(NA, nFeatures)
 for (i in 1:(ncol(trainData) - 1)) {
   coefi = coef(regfit.best.validate, id = i)
   pred = val.mat[ , names(coefi)] %*% coefi
@@ -133,13 +135,54 @@ for (i in 1:(ncol(trainData) - 1)) {
 which.min(val.errors)
 coef(regfit.best.validate, which.min(val.errors))
 ```
+```{r}
+coef(regfit.full, 5)
+```
 
 -- This has the lowest RMSE 
 ```{r}
-bestSub7Fit = lm(G3 ~ traveltime + failures + famsup + paid + absences + G1 + G2, trainData)
+bestSub5Fit = lm(G3 ~ failures + paid + absences + G1 + G2, trainData)
 summary(bestSub7Fit)
 pred = predict(bestSub7Fit, testData)
 plot(preds, testData$G3, xlab = "Predicted G3", ylab = "Actual G3", main = "Predicted vs Actual Final Grades (Best 7 Subset Validation Set)")
+sqrt(mean((testData$G3 - pred)^2))
+```
+- Try doing CV with best subset. Must make prediction function. According to the output we should use 2 features for the lowest mean cv error
+```{r}
+predict.regsubsets = function(object, newData, id, ...) {
+  form = as.formula(object$call[[2]])
+  mat = model.matrix(form, newData)
+  coefi = coef(object, id = id)
+  xvars = names(coefi)
+  mat[ , xvars] %*% coefi
+}
+# 10 fold CV
+k = 10
+set.seed(1)
+folds = sample(rep(1:k, length = nTrain))
+cv.errors = matrix(NA, k, nFeatures, dimnames = list(NULL, paste(1:nFeatures)))
+
+for (j in 1:k) {
+  best.fit = regsubsets(G3 ~ ., trainData[folds != j, ], nvmax = nFeatures)
+  for (i in 1:nFeatures) {
+    pred = predict(best.fit, trainData[folds == j, ], nvmax = nFeatures, id = i)
+    cv.errors[j, i] = mean((trainData$G3[folds == j] - pred)^2) 
+  }
+}
+
+mean.cv.errors = apply(cv.errors, 2, mean)
+mean.cv.errors
+par(mfrow = c(1,1))
+plot(mean.cv.errors, type= "b")
+```
+```{r}
+which.min(mean.cv.errors)
+coef(regfit.full, which.min(mean.cv.errors))
+```
+```{r}
+bestSub2fit = lm(G3 ~ failures + G2, trainData)
+summary(bestSub2fit)
+pred = predict(bestSub2fit, testData)
 sqrt(mean((testData$G3 - pred)^2))
 ```
 
@@ -176,4 +219,27 @@ summary(forward_model_noAbsence)
 preds = predict(forward_model_noAbsence, testData)
 sqrt(mean((testData$G3 - preds)^2))
 ```
-The RMSE is higher then the previous model so we go back to the previous model found from forward selection
+
+- Try ridge regression
+```{r}
+#install.packages("glmnet")
+library(glmnet)
+x = model.matrix(G3 ~ ., all_data)[, -1]
+y = all_data$G3
+grid = 10^seq(10, -2, length = 100)
+rdige.mod = glmnet(x, y, alpha = 0, lambda = grid)
+dim(coef(ridge.mod))
+```
+
+```{r}
+set.seed(1)
+cv.out = cv.glmnet(x[trainIdx, ], y[trainIdx], alpha = 0)
+plot(cv.out)
+bestlam = cv.out$lambda.min
+bestlam
+```
+
+```{r}
+ridge.pred = predict(ridge.mod, s = bestlam, newx = x[-trainIdx, ])
+sqrt(mean((ridge.pred - y[-trainIdx])^2))
+```
