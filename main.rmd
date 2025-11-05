@@ -144,7 +144,7 @@ coef(regfit.full, 5)
 bestSub5Fit = lm(G3 ~ failures + paid + absences + G1 + G2, trainData)
 summary(bestSub5Fit)
 pred = predict(bestSub5Fit, testData)
-plot(preds, testData$G3, xlab = "Predicted G3", ylab = "Actual G3", main = "Predicted vs Actual Final Grades (Best 5 Subset Validation Set)")
+plot(pred, testData$G3, xlab = "Predicted G3", ylab = "Actual G3", main = "Predicted vs Actual Final Grades (Best 5 Subset Validation Set)")
 sqrt(mean((testData$G3 - pred)^2))
 ```
 - Try doing CV with best subset. Must make prediction function. According to the output we should use 2 features for the lowest mean cv error
@@ -177,12 +177,22 @@ plot(mean.cv.errors, type= "b")
 ```
 ```{r}
 which.min(mean.cv.errors)
-coef(regfit.full, which.min(mean.cv.errors))
+
 ```
 ```{r}
+coef(regfit.full, which.min(mean.cv.errors))
 bestSub2fit = lm(G3 ~ failures + G2, trainData)
 summary(bestSub2fit)
 pred = predict(bestSub2fit, testData)
+sqrt(mean((testData$G3 - pred)^2))
+```
+
+```{r}
+coef(regfit.full, 9)
+
+bestSub9fit <- lm(G3 ~ Pstatus + Fjob + traveltime + failures + famsup + paid + absences + G1 + G2, data = trainData)
+summary(bestSub9fit)
+pred = predict(bestSub9fit, newdata = testData)
 sqrt(mean((testData$G3 - pred)^2))
 ```
 
@@ -227,7 +237,7 @@ library(glmnet)
 x = model.matrix(G3 ~ ., all_data)[, -1]
 y = all_data$G3
 grid = 10^seq(10, -2, length = 100)
-rdige.mod = glmnet(x, y, alpha = 0, lambda = grid)
+ridge.mod = glmnet(x, y, alpha = 0, lambda = grid)
 dim(coef(ridge.mod))
 ```
 
@@ -243,3 +253,31 @@ bestlam
 ridge.pred = predict(ridge.mod, s = bestlam, newx = x[-trainIdx, ])
 sqrt(mean((ridge.pred - y[-trainIdx])^2))
 ```
+
+
+```{r}
+lasso.mod = glmnet(x[trainIdx, ], y[trainIdx], alpha = 1, lambda = grid)
+plot(lasso.mod)
+```
+
+
+```{r}
+set.seed(1)
+cv.out = cv.glmnet(x[trainIdx, ], y[trainIdx], alpha = 1)
+plot(cv.out)
+bestlam = cv.out$lambda.min
+bestlam
+lasso.pred = predict(lasso.mod, s = bestlam, newx = x[-trainIdx, ])
+sqrt(mean((lasso.pred - y[-trainIdx])^2))
+```
+- lasso gives a close rsme to the best 5 subset but it is still worse then it. We will now try different models.
+```{r}
+out = glmnet(x, y, alpha = 1, lambda = grid)
+lasso.coef = predict(out, type = "coefficients", s = bestlam)[1:(nFeatures + 1), ]
+lasso.coef
+lasso.coef[lasso.coef != 0]
+xTest = model.matrix(G3 ~ ., testData)[ , -1]
+pred = predict(out, s = bestlam, newx = xTest)
+sqrt(mean((testData$G3 - pred)^2))
+```
+
