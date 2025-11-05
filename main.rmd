@@ -142,9 +142,9 @@ coef(regfit.full, 5)
 -- This has the lowest RMSE 
 ```{r}
 bestSub5Fit = lm(G3 ~ failures + paid + absences + G1 + G2, trainData)
-summary(bestSub7Fit)
-pred = predict(bestSub7Fit, testData)
-plot(preds, testData$G3, xlab = "Predicted G3", ylab = "Actual G3", main = "Predicted vs Actual Final Grades (Best 7 Subset Validation Set)")
+summary(bestSub5Fit)
+pred = predict(bestSub5Fit, testData)
+plot(preds, testData$G3, xlab = "Predicted G3", ylab = "Actual G3", main = "Predicted vs Actual Final Grades (Best 5 Subset Validation Set)")
 sqrt(mean((testData$G3 - pred)^2))
 ```
 - Try doing CV with best subset. Must make prediction function. According to the output we should use 2 features for the lowest mean cv error
