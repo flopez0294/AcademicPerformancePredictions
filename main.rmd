@@ -48,11 +48,24 @@ for (i in namesInData){
   
 }
 ```
+- We need to convert some of the data to factor for example study and travel time since it just classifying a range. In studytime 1 is for less then 2 hours, 2 is for 2 to 5 hours, 3 is for 5 to 10 hours, and 4 is for 10 hours or more. We would have to change these variables so it doesn't mess with our models.
+```{r}
+nameOfNumericCols = names(all_data)[sapply(all_data, is.numeric)]
+nameOfNumericCols
+
+```
+
+- These are the values that are considered numeric, but we need to change the ones that are just numeric values to define a category. We could change the values for health, Walc, Dalc, goout, and freetime to factors since it just stating a category.
+```{r}
+
+```
+
 ```{r}
 set.seed(1)
 n = nrow(all_data)
 percentTrain = .7
-trainIdx = sample(1:n, n*percentTrain)
+nTrain = n*percentTrain
+trainIdx = sample(1:n, nTrain)
 trainData = all_data[trainIdx, ]
 allLinearFit = lm(G3 ~ ., trainData)
 testData = all_data[-trainIdx,]
@@ -74,13 +87,60 @@ sqrt(mean((testData$G3 - preds)^2))
 #install.packages("leaps")
 library(leaps)
 regfit.full = regsubsets(G3 ~ ., trainData, nvmax = ncol(trainData) - 1)
-summary(regfit.full)
+regfit.summary = summary(regfit.full)
+regfit.summary
+```
+
+
+```{r}
+regfit.adjr2 = regfit.summary$adjr2
+plot(regfit.adjr2, type = 'b', ylab = "Adjusted R^2")
+which.max(regfit.adjr2)
+regfit.adjr2[14]
+```
+- The best model according to the training data is with 14 variables. The variables are address, Pstatus, Fjob, traveltime, failures, famsup, paid, activities, absences, G1, and G2. This is not a total of 14 because it has dummy variables within Fjob, and famsup. We can try to make a model with these variables. This turns out to be worse then forward selection so we should try to find the model that has the best CV.
+
+```{r}
+bestSub14fit = lm(G3 ~ address + Pstatus + Fjob + traveltime + failures + famsup + paid + activities + absences + G1 + G2, trainData)
+summary(bestSub14fit)
+
+preds = predict(bestSub14fit, testData)
+sqrt(mean((testData$G3 - preds)^2))
+```
+
+- Using validation set for best subset selection
+```{r}
+percentVal = .2
+nValidation = percentVal*n
+valD = sample(1:nTrain, nValidation)
+subSetVal = trainData[valD,] 
+subSetTrain = trainData[-valD,]
 ```
 
 ```{r}
-num_pred = 1:length(regfit.full$rss)
-plot(num_pred, regfit.full$rss, xlab = "Number of Predictors", ylab = "RSS", type = "b", pch = 19, col = "blue", main = "RSS vs Number of Predictors")
-which.min(regfit.full$rss)
+regfit.best.validate = regsubsets(G3 ~ ., subSetTrain, nvmax = ncol(trainData) - 1)
+```
+
+- the model with the lowest validation error is one that uses 7 variables. They are traveltime, failures, famsup, paid, absences, G1, and G2. Now we should train a model using the full training set and check the testing error.
+```{r}
+val.mat = model.matrix(G3 ~ ., subSetVal)
+val.errors = rep(NA, ncol(trainData) - 1)
+for (i in 1:(ncol(trainData) - 1)) {
+  coefi = coef(regfit.best.validate, id = i)
+  pred = val.mat[ , names(coefi)] %*% coefi
+  val.errors[i] = mean((subSetVal$G3 - pred)^2)
+}
+which.min(val.errors)
+coef(regfit.best.validate, which.min(val.errors))
+```
+
+-- This has the lowest RMSE 
+```{r}
+bestSub7Fit = lm(G3 ~ traveltime + failures + famsup + paid + absences + G1 + G2, trainData)
+summary(bestSub7Fit)
+pred = predict(bestSub7Fit, testData)
+plot(preds, testData$G3, xlab = "Predicted G3", ylab = "Actual G3", main = "Predicted vs Actual Final Grades (Best 7 Subset Validation Set)")
+sqrt(mean((testData$G3 - pred)^2))
 ```
 
 - Backward Selection
@@ -88,6 +148,8 @@ which.min(regfit.full$rss)
 fullFit = lm(G3 ~ ., trainData)
 backward_model = step(fullFit, direction = "backward", trace = F)
 summary(backward_model)
+preds = predict(backward_model, testData)
+sqrt(mean((testData$G3 - preds)^2))
 ```
 
 - Forward Selection
