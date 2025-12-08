@@ -281,3 +281,23 @@ pred = predict(out, s = bestlam, newx = xTest)
 sqrt(mean((testData$G3 - pred)^2))
 ```
 
+-Decision Tree
+```{r}
+library(rpart)
+library(rpart.plot)
+tree_model = rpart(G3 ~ ., data = trainData, method = "anova")
+print(tree_model)
+rpart.plot(tree_model, main = "Decision Tree for Student Performance")
+tree_pred = predict(tree_model, newdata = testData)
+tree_rmse = sqrt(mean((testData$G3 - tree_pred)^2))
+cat("Decision Tree RMSE:", tree_rmse, "\n")
+plot(tree_pred, testData$G3, xlab = "Predicted G3", ylab = "Actual G3", main = "Predicted vs Actual Final Grades (Decision Tree)")
+printcp(tree_model)
+printcp(tree_model)
+optimal_cp = tree_model$cptable[which.min(tree_model$cptable[, "xerror"]), "CP"]
+pruned_tree = prune(tree_model, cp = optimal_cp)
+rpart.plot(pruned_tree, main = "Pruned Decision Tree for Student Performance")
+pruned_pred = predict(pruned_tree, newdata = testData)
+pruned_rmse = sqrt(mean((testData$G3 - pruned_pred)^2))
+cat("Pruned Decision Tree RMSE:", pruned_rmse, "\n")
+```
