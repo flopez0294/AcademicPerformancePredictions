@@ -94,11 +94,23 @@ regfit.summary
 
 
 ```{r}
+
 regfit.adjr2 = regfit.summary$adjr2
+plot(regfit.summary$rsq)
+plot(regfit.summary$rss)
+plot(regfit.summary$cp)
+plot(regfit.summary$bic)
 plot(regfit.adjr2, type = 'b', ylab = "Adjusted R^2")
 which.max(regfit.adjr2)
+which.min(regfit.summary$cp)
+which.min(regfit.summary$bic)
 regfit.adjr2[14]
+coef(regfit.full, id=14)
+coef(regfit.full, id=10)
+coef(regfit.full, id=2)
 ```
+
+
 - The best model according to the training data is with 14 variables. The variables are address, Pstatus, Fjob, traveltime, failures, famsup, paid, activities, absences, G1, and G2. This is not a total of 14 because it has dummy variables within Fjob, and famsup. We can try to make a model with these variables. This turns out to be worse then forward selection so we should try to find the model that has the best CV.
 
 ```{r}
@@ -106,6 +118,14 @@ bestSub14fit = lm(G3 ~ address + Pstatus + Fjob + traveltime + failures + famsup
 summary(bestSub14fit)
 
 preds = predict(bestSub14fit, testData)
+sqrt(mean((testData$G3 - preds)^2))
+```
+
+```{r}
+bestSub10fit = lm(G3 ~ Pstatus + Fjob + traveltime + failures + paid + famsup + absences + G1 + G2, trainData)
+summary(bestSub10fit)
+
+preds = predict(bestSub10fit, testData)
 sqrt(mean((testData$G3 - preds)^2))
 ```
 
@@ -144,7 +164,7 @@ coef(regfit.full, 5)
 bestSub5Fit = lm(G3 ~ failures + paid + absences + G1 + G2, trainData)
 summary(bestSub5Fit)
 pred = predict(bestSub5Fit, testData)
-plot(pred, testData$G3, xlab = "Predicted G3", ylab = "Actual G3", main = "Predicted vs Actual Final Grades (Best 5 Subset Validation Set)")
+plot(pred, testData$G3, xlab = "Predicted G3", ylab = "Actual G3", main = "Predicted vs Actual Final Grades (Best 5  Subset Validation Set)")
 sqrt(mean((testData$G3 - pred)^2))
 ```
 - Try doing CV with best subset. Must make prediction function. According to the output we should use 2 features for the lowest mean cv error
@@ -173,14 +193,13 @@ for (j in 1:k) {
 mean.cv.errors = apply(cv.errors, 2, mean)
 mean.cv.errors
 par(mfrow = c(1,1))
-plot(mean.cv.errors, type= "b")
+plot(mean.cv.errors, type= "b", ylab = "CV Error", main = "CV Error vs number of best subset Features")
 ```
 ```{r}
 which.min(mean.cv.errors)
-
+coef(regfit.full, which.min(mean.cv.errors))
 ```
 ```{r}
-coef(regfit.full, which.min(mean.cv.errors))
 bestSub2fit = lm(G3 ~ failures + G2, trainData)
 summary(bestSub2fit)
 pred = predict(bestSub2fit, testData)
@@ -301,3 +320,140 @@ pruned_pred = predict(pruned_tree, newdata = testData)
 pruned_rmse = sqrt(mean((testData$G3 - pruned_pred)^2))
 cat("Pruned Decision Tree RMSE:", pruned_rmse, "\n")
 ```
+Lets try using the two the two features that the decision tree used for a linear regression It was worse then the best 
+```{r}
+twoFeaturelm = lm(G3 ~ absences + G2, data = trainData)
+
+twoFeaturePreds = predict(twoFeaturelm, testData)
+sqrt(mean((testData$G3 - twoFeaturePreds)^2))
+
+```
+```{r}
+#install.packages("randomForest")
+library(randomForest)
+set.seed(1)
+bag.grade = randomForest(G3 ~ ., trainData, mtry = nFeatures, importance = TRUE)
+bag.grade
+```
+
+```{r}
+summary(bag.grade)
+bag.preds = predict(bag.grade, testData)
+sqrt(mean((testData$G3 - bag.preds)^2))
+nFeatures
+```
+
+Do CV to find the best number of variables to consider
+
+```{r}
+k = 5
+set.seed(1)
+
+folds = sample(rep(1:k, length = nTrain))
+cv.errors = matrix(NA, k, nFeatures, dimnames = list(NULL, paste(1:nFeatures)))
+
+for (j in 1:k) {
+  train_fold = trainData[folds != j, ]
+  val_fold = trainData[folds == j, ]
+  for (i in 1:nFeatures) {
+    cvModel = randomForest(G3 ~ ., data = train_fold, mtry = i, importance = TRUE)
+    preds = predict(cvModel, val_fold)
+    cv.errors[j, i] = sqrt(mean((val_fold$G3 - preds)^2))
+  }
+}
+
+mean.cv.errors = apply(cv.errors, 2, mean)
+mean.cv.errors
+
+par(mfrow = c(1,1))
+plot(1:nFeatures, mean.cv.errors, type = "b", xlab = "mtry", ylab = "CV RMSE", main = "5-Fold CV for Random Forest mtry")
+best_mtry = which.min(mean.cv.errors)
+best_mtry
+best_mtry_model = randomForest(G3 ~ ., data = trainData, mtry = best_mtry, importance = TRUE)
+preds = predict(best_mtry_model, testData)
+sqrt(mean((testData$G3 - preds)^2))
+```
+5-fold cv for ntree
+```{r}
+k = 5
+set.seed(1)
+
+num_tree = c(300,400,500,600,700,800,900,1000,1100,1200,1300,1400,1500)
+folds = sample(rep(1:k, length = nTrain))
+cv.errors = matrix(NA, k, length(num_tree), dimnames = list(NULL, paste(num_tree)))
+
+for (j in 1:k) {
+  train_fold = trainData[folds != j, ]
+  val_fold = trainData[folds == j, ]
+  for (i in 1:length(num_tree)) {
+    cvModel = randomForest(G3 ~ ., data = train_fold, mtry = best_mtry, ntree = num_tree[i], importance = TRUE)
+    preds = predict(cvModel, val_fold)
+    cv.errors[j, i] = sqrt(mean((val_fold$G3 - preds)^2))
+  }
+}
+
+mean.cv.errors = apply(cv.errors, 2, mean)
+mean.cv.errors
+```
+
+```{r}
+set.seed(1)
+best_mtry = 18
+par(mfrow = c(1,1))
+plot(num_tree, mean.cv.errors, type = "b", xlab = "ntree", ylab = "CV RMSE", main = "5-Fold CV for Random Forest ntree with mtry = 18")
+best_ntree = num_tree[which.min(mean.cv.errors)]
+best_ntree
+best_mtry_ntree_model = randomForest(G3 ~ ., data = trainData, mtry = best_mtry, ntree = best_ntree, importance = TRUE)
+preds = predict(best_mtry_ntree_model, testData)
+sqrt(mean((testData$G3 - preds)^2))
+```
+
+```{r}
+importance(best_mtry_ntree_model)
+varImpPlot(best_mtry_ntree_model)
+```
+try only using the best 4 features that are used G2, G1, absences and failures and the current best ntree
+```{r}
+set.seed(1)
+mostImportFeaturesRandomForeset = c('G2','G1','absences','failures','G3')
+mostImportTrain = trainData[, mostImportFeaturesRandomForeset]
+mostImportTest = testData[, mostImportFeaturesRandomForeset]
+mostImportModel = randomForest(G3 ~ ., mostImportTrain, mtry = ncol(mostImportTrain) - 1, ntrees = best_ntree, importance = TRUE)
+preds = predict(mostImportModel, mostImportTest)
+sqrt(mean((mostImportTest$G3 - preds)^2))
+```
+Try k-fold cv for number of trees using this subset when only consider these features for splits
+```{r}
+k = 5
+set.seed(1)
+
+num_tree = c(300,400,500,600,700,800,900,1000,1100,1200,1300,1400,1500)
+folds = sample(rep(1:k, length = nTrain))
+cv.errors = matrix(NA, k, length(num_tree), dimnames = list(NULL, paste(num_tree)))
+
+for (j in 1:k) {
+  train_fold = mostImportTrain[folds != j, ]
+  val_fold = mostImportTrain[folds == j, ]
+  for (i in 1:length(num_tree)) {
+    cvModel = randomForest(G3 ~ ., data = train_fold, mtry = 4, ntree = num_tree[i], importance = TRUE)
+    preds = predict(cvModel, val_fold)
+    cv.errors[j, i] = sqrt(mean((val_fold$G3 - preds)^2))
+  }
+}
+
+mean.cv.errors = apply(cv.errors, 2, mean)
+mean.cv.errors
+
+par(mfrow = c(1,1))
+plot(num_tree, mean.cv.errors, type = "b", xlab = "ntree", ylab = "CV RMSE", main = "5-Fold CV for Random Forest ntree with Important Features")
+best_ntree = num_tree[which.min(mean.cv.errors)]
+best_ntree
+best_mtry_ntree_model = randomForest(G3 ~ ., data = mostImportTrain, mtry = 4, ntree = best_ntree, importance = TRUE)
+preds = predict(best_mtry_ntree_model, mostImportTest)
+sqrt(mean((testData$G3 - preds)^2))
+```
+
+
+
+
+
