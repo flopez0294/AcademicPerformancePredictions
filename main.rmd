@@ -96,11 +96,9 @@ regfit.summary
 ```{r}
 
 regfit.adjr2 = regfit.summary$adjr2
-plot(regfit.summary$rsq)
-plot(regfit.summary$rss)
-plot(regfit.summary$cp)
-plot(regfit.summary$bic)
-plot(regfit.adjr2, type = 'b', ylab = "Adjusted R^2")
+plot(regfit.summary$cp, xlab = "Number of features", ylab = "Cp", main = "Cp vs Number of features")
+plot(regfit.summary$bic, xlab = "Number of features", ylab = "BIC", main = "BIC vs Number of features")
+plot(regfit.adjr2, xlab = "Number of features", ylab = "Adjusted R^2", main = "Adjusted R^2 vs Number of features")
 which.max(regfit.adjr2)
 which.min(regfit.summary$cp)
 which.min(regfit.summary$bic)
@@ -155,6 +153,11 @@ for (i in 1:(ncol(trainData) - 1)) {
 which.min(val.errors)
 coef(regfit.best.validate, which.min(val.errors))
 ```
+
+```{r}
+plot(val.errors, xlab = "Number of features", ylab = "CV Error", main = "CV Error vs Number of features")
+```
+
 ```{r}
 coef(regfit.full, 5)
 ```
@@ -193,7 +196,7 @@ for (j in 1:k) {
 mean.cv.errors = apply(cv.errors, 2, mean)
 mean.cv.errors
 par(mfrow = c(1,1))
-plot(mean.cv.errors, type= "b", ylab = "CV Error", main = "CV Error vs number of best subset Features")
+plot(mean.cv.errors, type= "b", ylab = "CV Error", xlab = "Number of features", main = "CV Error vs number of best subset Features")
 ```
 ```{r}
 which.min(mean.cv.errors)
@@ -366,7 +369,7 @@ mean.cv.errors = apply(cv.errors, 2, mean)
 mean.cv.errors
 
 par(mfrow = c(1,1))
-plot(1:nFeatures, mean.cv.errors, type = "b", xlab = "mtry", ylab = "CV RMSE", main = "5-Fold CV for Random Forest mtry")
+plot(1:nFeatures, mean.cv.errors, xlab = "mtry", ylab = "CV Error", main = "5-Fold CV for Random Forest mtry")
 best_mtry = which.min(mean.cv.errors)
 best_mtry
 best_mtry_model = randomForest(G3 ~ ., data = trainData, mtry = best_mtry, importance = TRUE)
@@ -400,7 +403,7 @@ mean.cv.errors
 set.seed(1)
 best_mtry = 18
 par(mfrow = c(1,1))
-plot(num_tree, mean.cv.errors, type = "b", xlab = "ntree", ylab = "CV RMSE", main = "5-Fold CV for Random Forest ntree with mtry = 18")
+plot(num_tree, mean.cv.errors, xlab = "ntree", ylab = "CV Error", main = "5-Fold CV for Random Forest ntree with mtry = 18")
 best_ntree = num_tree[which.min(mean.cv.errors)]
 best_ntree
 best_mtry_ntree_model = randomForest(G3 ~ ., data = trainData, mtry = best_mtry, ntree = best_ntree, importance = TRUE)
